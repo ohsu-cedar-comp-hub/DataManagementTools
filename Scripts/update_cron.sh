@@ -18,8 +18,20 @@ echo >> disc.txt
 echo "MTD" >> disc.txt
 /usr/local/bin/sreport-accts-summary Accounts=CEDAR,CEDAR2 Start=$(date -d "-1 month" +"%Y-%m-%d") >> disc.txt
 echo >> disc.txt
-echo "YTD" >> disc.txt
-/usr/local/bin/sreport-accts-summary Accounts=CEDAR,CEDAR2 Start=$(date -d "-1 year" +"%Y-%m-%d") >> disc.txt
+echo "FYTD" >> disc.txt
+if [ "$(date +%m)" -lt 7 ]; then
+    start_fy=$(date -d "$(date +%Y)-07-01 -1 year" +"%Y-%m-%d")
+else 
+    start_fy=$(date -d "$(date +%Y)-07-01" +"%Y-%m-%d")
+
+fi 
+
+/usr/local/bin/sreport-accts-summary Accounts=CEDAR,CEDAR2 Start=$start_fy >> disc.txt
+
+
+#echo "FYTD" >> $curr/disc.txt
+#/usr/local/bin/sreport-accts-summary Accounts=CEDAR,CEDAR2 Start=$(date -d "-1 year" +"%Y-%m-%d") >> $curr/disc.txt
+ 
 
 
 ### Daily update
