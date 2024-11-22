@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 ### RDS storage
 df -h --direct /home/groups/CEDAR > disc.txt
 
@@ -11,14 +12,16 @@ gpuse=`echo $gused $gsize | awk '{printf"%d",$1/$2*100}'`
 echo $gsize $gused $gavai $gpuse | awk '{printf"\t\t%d%s%d%s%d%s%d%s%s\n",$1,"T  ",$2,"T   ",$3,"T  ",$4,"% ","/home/exacloud/gscratch/CEDAR"}' >> disc.txt
 echo >> disc.txt
 
-### Add Usage Tracking to same file 
-echo "Daily" >> disc.txt
-/usr/local/bin/sreport-accts-summary Accounts=CEDAR,CEDAR2 Start=$(date +"%Y-%m-%d") >> disc.txt
-echo >> disc.txt
-echo "MTD" >> disc.txt
-/usr/local/bin/sreport-accts-summary Accounts=CEDAR,CEDAR2 Start=$(date -d "-1 month" +"%Y-%m-%d") >> disc.txt
-echo >> disc.txt
+
+## Add Usage Tracking + Budget Info to same file 
+CPUBudgetMonthly=660000
+GPUBudgetMonthly=6000
+
+
+
+# FYTD - x months before 
 echo "FYTD" >> disc.txt
+
 if [ "$(date +%m)" -lt 7 ]; then
     start_fy=$(date -d "$(date +%Y)-07-01 -1 year" +"%Y-%m-%d")
 else 
@@ -26,13 +29,94 @@ else
 
 fi 
 
-/usr/local/bin/sreport-accts-summary Accounts=CEDAR,CEDAR2 Start=$start_fy >> disc.txt
+
+/usr/local/bin/sreport-accts-summary Accounts=CEDAR,CEDAR2 Start=$start_fy > test.txt
+
+# Budget needs to be calcd depending on # of months 
+# 2628288 seconds in a month
+months=$(echo "scale=2; ($(date -d "$(date +"%Y-%m-%d")" +%s) - $(date -d "$start_fy" +%s)) / 2628288" | bc)
+
+CPUBudgetFYTD=$(echo "$CPUBudgetMonthly * $months" | bc)
+GPUBudgetFYTD=$(echo "$GPUBudgetMonthly * $months" | bc)
+
+echo "${months} months - Budget - CPU: ${CPUBudgetFYTD} hrs ; GPU: ${GPUBudgetFYTD} hrs" >> disc.txt
+
+echo "" >> disc.txt
+awk -v CPUproratedBudget=$CPUBudgetFYTD -v GPUproratedBudget=$GPUBudgetFYTD '
+
+NR < 5 {
+    print $0;
+    next;  # Skip to the next line without further processing
+}
+
+NR == 6 {# print headers
+print "Account|CPUused|GPUused|%CPUProratedBudget|%GPUProratedBudget";
+} 
+
+NR >= 6 {
+    split($0, fields, "|");
+    CPUused = fields[2];
+    GPUused = fields[3];
+    total_CPUused += CPUused;
+    total_GPUused += GPUused;
+
+    print $0 "|" "|"
+
+}
+
+END {
+    CPUProratedPercent = (total_CPUused / CPUproratedBudget) * 100;
+    GPUProratedPercent = (total_GPUused / GPUproratedBudget) * 100;
+    print "TOTAL|" total_CPUused "|"  total_GPUused "|" CPUProratedPercent "%" "|" GPUProratedPercent "%";
+}
+' test.txt >> disc.txt
 
 
-#echo "FYTD" >> $curr/disc.txt
-#/usr/local/bin/sreport-accts-summary Accounts=CEDAR,CEDAR2 Start=$(date -d "-1 year" +"%Y-%m-%d") >> $curr/disc.txt
- 
+echo "" >> disc.txt
+# MTD - just 1 month ago 
+echo "MTD" >> disc.txt
+echo "1 month -  Budget - CPU: 660000 hrs ; GPU: 6000 hrs" >> disc.txt
+echo "" >> disc.txt
+total_CPUused=0
+total_GPUused=0
 
+Start=$(date -d "-1 month" +"%Y-%m-%d")
+
+/usr/local/bin/sreport-accts-summary Accounts=CEDAR,CEDAR2 Start=$Start > test.txt 
+
+# Budget : 110 CPU units (660000 hrs) / month + 10 GPU units (6000 hrs) / month 
+awk -v CPUproratedBudget=$CPUBudgetMonthly -v GPUproratedBudget=$GPUBudgetMonthly '
+
+NR < 5 {
+    print $0;
+    next;  
+}
+
+NR == 6 {
+print "Account|CPUused|GPUused|%CPUProratedBudget|%GPUProratedBudget";
+} 
+
+NR >= 6 {
+    split($0, fields, "|");
+    CPUused = fields[2];
+    GPUused = fields[3];
+    total_CPUused += CPUused;
+    total_GPUused += GPUused;
+
+    print $0 "|" "|"
+
+}
+
+END {
+    CPUProratedPercent = (total_CPUused / CPUproratedBudget) * 100;
+    GPUProratedPercent = (total_GPUused / GPUproratedBudget) * 100;
+    print "TOTAL|" total_CPUused "|"  total_GPUused "|" CPUProratedPercent "%" "|" GPUProratedPercent "%";
+}
+' test.txt >> disc.txt
+
+echo >> disc.txt
+
+rm test.txt
 
 ### Daily update
 
@@ -47,6 +131,3 @@ df -h --direct /home/groups/CEDAR >> RDS.txt
 date >> Gscratch.txt
 df -h --direct /home/groups/CEDAR | head -1 >> Gscratch.txt
 echo $gsize $gused $gavai $gpuse | awk '{printf"\t\t%d%s%d%s%d%s%d%s%s\n",$1,"T  ",$2,"T   ",$3,"T  ",$4,"% ","/home/exacloud/gscratch/CEDAR"}' >> Gscratch.txt
-
-
-
