@@ -5,11 +5,7 @@
 df -h --direct /home/groups/CEDAR > disc.txt
 
 ### Gscratch storage
-gsize=`lfs quota -h -p 3901  /home/exacloud/gscratch/CEDAR |  tail -1 | awk '{print $3}' | sed "s|T| |g"`
-gused=`lfs quota -h -p 3901  /home/exacloud/gscratch/CEDAR |  tail -1 | awk '{print $1}' | sed "s|T| |g"`
-gavai=`echo $gsize $gused | awk '{print $1-$2}'`
-gpuse=`echo $gused $gsize | awk '{printf"%d",$1/$2*100}'`
-echo $gsize $gused $gavai $gpuse | awk '{printf"\t\t%d%s%d%s%d%s%d%s%s\n",$1,"T  ",$2,"T   ",$3,"T  ",$4,"% ","/home/exacloud/gscratch/CEDAR"}' >> disc.txt
+df -h --direct /home/exacloud/gscratch/CEDAR >> disc.txt
 echo >> disc.txt
 
 
@@ -20,7 +16,7 @@ GPUBudgetMonthly=6000
 
 
 # FYTD - x months before 
-echo "FYTD" >> disc.txt
+echo "FYTD - ARC + Exacloud" >> disc.txt
 
 if [ "$(date +%m)" -lt 7 ]; then
     start_fy=$(date -d "$(date +%Y)-07-01 -1 year" +"%Y-%m-%d")
@@ -57,10 +53,18 @@ NR >= 6 {
     split($0, fields, "|");
     CPUused = fields[2];
     GPUused = fields[3];
+    if (fields[1] == "cedar"){
+        CPUused += 651241; # adding exacloud data 
+        GPUused += 21662; }
+    else if (fields[1] == "cedar2") {
+        CPUused += 1301103;
+        GPUused += 0;
+    }
     total_CPUused += CPUused;
     total_GPUused += GPUused;
 
-    print $0 "|" "|"
+    print fields[1] "|" CPUused "|" GPUused "|" "|"
+
 
 }
 
@@ -74,7 +78,7 @@ END {
 
 echo "" >> disc.txt
 # MTD - just 1 month ago 
-echo "MTD" >> disc.txt
+echo "MTD - ARC " >> disc.txt
 echo "1 month -  Budget - CPU: 660000 hrs ; GPU: 6000 hrs" >> disc.txt
 echo "" >> disc.txt
 total_CPUused=0
@@ -100,6 +104,7 @@ NR >= 6 {
     split($0, fields, "|");
     CPUused = fields[2];
     GPUused = fields[3];
+    
     total_CPUused += CPUused;
     total_GPUused += GPUused;
 
@@ -122,12 +127,11 @@ rm test.txt
 
 for recips in `cat recips.txt`
 do
-    mail -s "Exacloud diskspace" $recips < disc.txt
+ mail -s "Exacloud diskspace" $recips < disc.txt
 done
 
 ### Update local copy    
 date >> RDS.txt
 df -h --direct /home/groups/CEDAR >> RDS.txt
 date >> Gscratch.txt
-df -h --direct /home/groups/CEDAR | head -1 >> Gscratch.txt
-echo $gsize $gused $gavai $gpuse | awk '{printf"\t\t%d%s%d%s%d%s%d%s%s\n",$1,"T  ",$2,"T   ",$3,"T  ",$4,"% ","/home/exacloud/gscratch/CEDAR"}' >> Gscratch.txt
+df -h --direct /home/exacloud/gscratch/CEDAR >> Gscratch.txt
